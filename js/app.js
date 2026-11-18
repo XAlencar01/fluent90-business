@@ -52,7 +52,10 @@
     pen: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/>',
     note: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
     x: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
-    book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/>'
+    book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/>',
+    phones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/>',
+    bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/><path d="M12 7v6M9 10h6"/>',
+    rec: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/>'
   };
   const icon = (n, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 
@@ -60,7 +63,7 @@
   const KEY = 'fluent90.v1';
   const defaults = () => ({
     created: todayKey(), level: null, placement: null, days: {}, units: {}, exScores: {},
-    cards: {}, daily: {}, journal: [], interview: {}, resetAt: 0,
+    cards: {}, daily: {}, journal: [], interview: {}, custom: {}, listening: {}, resetAt: 0,
     settings: { rate: 0.95, pitch: 1.06, voice: '', dir: 'pt-en', newPerDay: 15, theme: 'auto' }
   });
   let S;
@@ -113,6 +116,13 @@
     for (const [k, c] of Object.entries(b.cards || {})) { const x = m.cards[k]; if (!x || (c.at || 0) > (x.at || 0)) m.cards[k] = c; }
     for (const [k, d] of Object.entries(b.daily || {})) { m.daily[k] = m.daily[k] || {}; for (const t in d) if (d[t]) m.daily[k][t] = true; }
     for (const [k, v] of Object.entries(b.interview || {})) { const x = m.interview[k]; if (!x || (v.times || 0) > (x.times || 0)) m.interview[k] = v; }
+    m.custom = m.custom || {}; m.listening = m.listening || {};
+    for (const [k, c] of Object.entries(b.custom || {})) { const x = m.custom[k]; if (!x || (c.at || 0) > (x.at || 0)) m.custom[k] = c; }
+    for (const [k, v] of Object.entries(b.listening || {})) {
+      const x = m.listening[k];
+      if (!x) m.listening[k] = v;
+      else m.listening[k] = { best: Math.max(x.best || 0, v.best || 0), times: Math.max(x.times || 0, v.times || 0), at: Math.max(x.at || 0, v.at || 0) };
+    }
     if (b.placement && (!m.placement || (b.placement.at || 0) > (m.placement.at || 0))) { m.placement = b.placement; m.level = b.level; }
     const seen = new Set(m.journal.map(j => j.at + '|' + j.text.length));
     (b.journal || []).forEach(j => { if (!seen.has(j.at + '|' + j.text.length)) m.journal.push(j); });
@@ -212,21 +222,36 @@
       if (S.settings.voice && !S.settings.voice.startsWith('claude:')) { const f = v.find(x => x.name === S.settings.voice); if (f) return f; }
       return [...v].sort((a, b) => this.rank(a) - this.rank(b))[0];
     },
-    speak(text, rate) {
+    // segunda voz (diálogos): de preferência masculina e natural, diferente da principal
+    altRank(x) {
+      const n = x.name;
+      const male = /\bmale\b|guy|andrew|brian|christopher|eric|roger|steffan|davis|tony|jason|\balex\b|fred|daniel|david|mark|aaron|\btom\b|evan|nathan|ryan/i.test(n);
+      let r = male && /natural|neural/i.test(n) ? 1 : male && /premium|enhanced/i.test(n) ? 2 : male ? 5 : /natural|neural/i.test(n) ? 10 : 20;
+      if (!/en[-_]US/i.test(x.lang)) r += 10;
+      return r;
+    },
+    pickAlt() {
+      const main = this.pick();
+      const others = this.voices.filter(v => !main || v.name !== main.name);
+      return others.length ? [...others].sort((a, b) => this.altRank(a) - this.altRank(b))[0] : main;
+    },
+    speak(text, rate, o = {}) {
       rate = rate || S.settings.rate;
       const chosen = S.settings.voice || '';
       // voz do Claude escolhida no Perfil, ou aparelho sem voz em inglês
       if (this.cloud && (chosen.startsWith('claude:') || !this.ok || !this.voices.length)) {
         const opts = { language: 'en', rate: Math.min(1.5, Math.max(0.7, rate)) };
-        if (chosen.startsWith('claude:')) opts.voice = chosen.slice(7);
+        const main = chosen.startsWith('claude:') ? chosen.slice(7) : 'buttery';
+        opts.voice = o.alt ? (main === 'rounded' ? 'glassy' : 'rounded') : main;
         return this.cloud.speak(text, opts).catch(() => { });
       }
       return new Promise(res => {
         if (!this.ok) { toast('Este navegador não tem voz para leitura.'); return res(); }
         speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        const v = this.pick(); if (v) u.voice = v;
-        u.lang = v ? v.lang : 'en-US'; u.rate = rate; u.pitch = S.settings.pitch || 1.06;
+        const main = this.pick(), v = o.alt ? this.pickAlt() : main; if (v) u.voice = v;
+        u.lang = v ? v.lang : 'en-US'; u.rate = rate;
+        u.pitch = o.alt ? (v === main ? 0.8 : 1) : (S.settings.pitch || 1.06);
         u.onend = res; u.onerror = res;
         speechSynthesis.speak(u); // chamada direta: iOS exige o toque do usuário
       });
@@ -433,18 +458,155 @@
     return wrap;
   }
 
+  /* ---------------- gravar e ouvir a própria voz ----------------
+     Usa o gravador do navegador (versão local / Vercel). Dentro do claude.ai
+     a página não tem acesso ao áudio do microfone, então o recurso se esconde. */
+  const Rec = {
+    supported: !IN_FRAME && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder),
+    blocked: false,
+    usable() { return this.supported && !this.blocked; },
+    async start(maxSecs = 180) {
+      Voice.abort(); TTS.stop();
+      let stream;
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+      catch (e) {
+        if (e && e.name === 'NotAllowedError') toast('Permita o microfone no navegador para gravar sua voz.');
+        else { this.blocked = true; toast('Não foi possível gravar áudio neste navegador.'); document.dispatchEvent(new Event('recmode')); }
+        return null;
+      }
+      const mime = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+      let mr;
+      try { mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); } catch (e) { stream.getTracks().forEach(t => t.stop()); toast('Gravador indisponível.'); return null; }
+      const chunks = [], t0 = Date.now();
+      mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+      let done;
+      const finished = new Promise(res => { done = res; });
+      mr.onstop = () => { stream.getTracks().forEach(t => t.stop()); done({ blob: new Blob(chunks, { type: mr.mimeType || mime || 'audio/webm' }), secs: (Date.now() - t0) / 1000 }); };
+      mr.start();
+      const limit = setTimeout(() => { if (mr.state !== 'inactive') mr.stop(); }, maxSecs * 1000);
+      return {
+        t0, finished,
+        stop() { clearTimeout(limit); if (mr.state !== 'inactive') mr.stop(); return finished; },
+        cancel() { clearTimeout(limit); mr.ondataavailable = null; if (mr.state !== 'inactive') mr.stop(); else stream.getTracks().forEach(t => t.stop()); }
+      };
+    }
+  };
+
+  // Gravações guardadas neste aparelho (IndexedDB)
+  const AudioStore = {
+    _db: null,
+    open() {
+      if (!this._db) this._db = new Promise((res, rej) => {
+        try {
+          const r = indexedDB.open('fluent90-audio', 1);
+          r.onupgradeneeded = () => r.result.createObjectStore('clips', { keyPath: 'id' });
+          r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+        } catch (e) { rej(e); }
+      }).catch(e => { this._db = null; throw e; });
+      return this._db;
+    },
+    async run(mode, fn) {
+      const db = await this.open();
+      return new Promise((res, rej) => {
+        const t = db.transaction('clips', mode), req = fn(t.objectStore('clips'));
+        t.oncomplete = () => res(req ? req.result : undefined); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+      });
+    },
+    put(c) { return this.run('readwrite', st => st.put(c)); },
+    all() { return this.run('readonly', st => st.getAll()).then(a => (a || []).sort((x, y) => x.at - y.at)); },
+    del(id) { return this.run('readwrite', st => st.delete(id)); }
+  };
+
+  function playBlob(blob) {
+    return new Promise(res => {
+      const url = URL.createObjectURL(blob), a = new Audio(url);
+      const end = () => { URL.revokeObjectURL(url); res(); };
+      a.onended = end; a.onerror = end;
+      a.play().catch(end);
+      onCleanup(() => { a.pause(); });
+    });
+  }
+
+  /* Botões "gravar minha voz / ouvir minha voz / ouvir a professora / comparar" */
+  function selfCompare(model, { title = 'Grave sua voz e compare com a professora' } = {}) {
+    const wrap = h(`<div class="selfrec">
+      <div class="selfrec-head">${icon('rec')}<span>${esc(title)}</span><span class="spacer"></span><span class="selfrec-time small muted"></span></div>
+      <div class="selfrec-btns">
+        <button class="btn sm" data-a="rec" type="button">⏺ Gravar</button>
+        <button class="btn sm" data-a="mine" type="button" hidden>▶ Minha voz</button>
+        ${model ? '<button class="btn sm" data-a="teacher" type="button">▶ Professora</button><button class="btn sm" data-a="both" type="button" hidden>⇄ Comparar</button>' : ''}
+      </div></div>`);
+    const recB = $('[data-a=rec]', wrap), mine = $('[data-a=mine]', wrap), both = $('[data-a=both]', wrap), tEl = $('.selfrec-time', wrap);
+    let sess = null, blob = null, tick = null;
+    const sync = () => { wrap.hidden = !Rec.usable(); };
+    document.addEventListener('recmode', sync); sync();
+    onCleanup(() => { document.removeEventListener('recmode', sync); clearInterval(tick); if (sess) sess.cancel(); });
+    recB.onclick = async () => {
+      if (sess) {
+        const s = sess; sess = null; clearInterval(tick);
+        const r = await s.stop();
+        recB.classList.remove('live'); recB.textContent = '⏺ Regravar';
+        if (r.secs < 0.8 || !r.blob.size) { tEl.textContent = ''; toast('Gravação muito curta.'); return; }
+        blob = r.blob; tEl.textContent = fmt(r.secs);
+        mine.hidden = false; if (both) both.hidden = false;
+        playBlob(blob);
+        return;
+      }
+      recB.disabled = true;
+      const s = await Rec.start(120);
+      recB.disabled = false;
+      if (!s) return;
+      sess = s; recB.classList.add('live'); recB.textContent = '■ Parar';
+      tick = setInterval(() => { tEl.textContent = '● ' + fmt((Date.now() - s.t0) / 1000); }, 300);
+    };
+    mine.onclick = () => { if (blob) { TTS.stop(); playBlob(blob); } };
+    const tb = $('[data-a=teacher]', wrap); if (tb) tb.onclick = () => TTS.speak(model);
+    if (both) both.onclick = async () => { if (!blob) return; await TTS.speak(model); await new Promise(r => setTimeout(r, 500)); playBlob(blob); };
+    return wrap;
+  }
+
+  /* ---------------- caderno de lacunas (cartões próprios) ---------------- */
+  function addCustom(id, data, silent) {
+    S.custom = S.custom || {};
+    const x = S.custom[id];
+    if (x && !x.del) { if (!silent) toast('Esse cartão já está no seu caderno.'); return false; }
+    S.custom[id] = { ...data, at: Date.now() }; save();
+    if (!silent) toast('✓ Adicionado ao caderno. Ele entra nos seus flashcards.');
+    return true;
+  }
+  function removeCustom(id) { if (S.custom && S.custom[id]) { S.custom[id] = { del: true, at: Date.now() }; save(); } }
+  const customList = () => Object.entries(S.custom || {}).filter(([, c]) => c && !c.del).map(([id, c]) => ({ id, ...c })).sort((a, b) => b.at - a.at);
+
+  // Questão errada na aula → cartão automático
+  function errorCard(u, i, ex, picked) {
+    let en, front;
+    if (ex.type === 'mc') {
+      const right = ex.options[ex.answer];
+      if (ex.q.includes('___')) { en = ex.q.replace('___', right); front = 'Complete em inglês: ' + ex.q; }
+      else {
+        if (/\bNÃO\b/.test(ex.q) || /[ãõçáéíóúâêô]|^O que/i.test(right)) return;
+        en = right; front = ex.q + (picked != null && picked !== ex.answer ? ` (você marcou: “${ex.options[picked]}”)` : '');
+      }
+    } else if (ex.type === 'fill') {
+      en = ex.q.replace(/_{2,}\s*(\([^)]*\))?/, ex.answer[0]).replace(/\s+/g, ' ').trim(); front = 'Complete em inglês: ' + ex.q;
+    } else { en = ex.answer + '.'; front = 'Monte a frase: ' + shuffle(ex.words).join(' · '); }
+    if (addCustom(`ex-${u.id}-${i}`, { src: 'erro', front, en, note: ex.explain, tag: `Erro · Unidade ${u.id}` }, true))
+      toast('Essa questão virou um cartão no seu caderno.');
+  }
+
   /* ---------------- shell & roteador ---------------- */
   const NAV = [
     ['Começar'],
     ['inicio', 'Hoje', 'home'], ['nivelamento', 'Nivelamento', 'level'], ['trilha', 'Trilha 12 semanas', 'path'],
     ['Treinos'],
-    ['flashcards', 'Flashcards', 'cards'], ['shadowing', 'Shadowing', 'wave'], ['pronuncia', 'Pronúncia', 'ear'],
+    ['flashcards', 'Flashcards', 'cards'], ['caderno', 'Caderno de lacunas', 'bookmark'], ['listening', 'Listening', 'phones'],
+    ['shadowing', 'Shadowing', 'wave'], ['pronuncia', 'Pronúncia', 'ear'],
     ['ditado', 'Ditado', 'pen'], ['entrevista', 'Simulador de entrevista', 'mic'], ['escrita', 'Escrita', 'note'], ['erros', 'Erros de brasileiro', 'x'],
     ['Você'],
-    ['metodo', 'Método e imersão', 'book'], ['progresso', 'Progresso', 'chart']
+    ['minhavoz', 'Minha voz', 'rec'], ['metodo', 'Método e imersão', 'book'], ['progresso', 'Progresso', 'chart']
   ];
   const TABS = [['inicio', 'Hoje', 'home'], ['trilha', 'Trilha', 'path'], ['treinar', 'Treinar', 'target'], ['entrevista', 'Entrevista', 'mic'], ['progresso', 'Perfil', 'chart']];
-  const TRAIN_ROUTES = ['treinar', 'flashcards', 'shadowing', 'pronuncia', 'ditado', 'escrita', 'erros', 'metodo', 'nivelamento'];
+  const TRAIN_ROUTES = ['treinar', 'flashcards', 'caderno', 'listening', 'shadowing', 'pronuncia', 'ditado', 'escrita', 'erros', 'metodo', 'nivelamento', 'minhavoz'];
 
   function renderShell() {
     $('#app').innerHTML = `
@@ -573,6 +735,11 @@
         <p>${esc(TEACHER_TIPS[seeded(TEACHER_TIPS.length)])}</p>
         <a href="#metodo" class="small">Ver o método completo →</a>
       </div></div>`));
+
+    el.append(h(`<a class="card section quick-add" href="#caderno-novo" style="color:inherit">
+      <span class="ic">${icon('bookmark')}</span>
+      <span><b>Quis dizer algo e não soube?</b><span class="small muted" style="display:block">Anote no caderno de lacunas. Vira flashcard na hora.</span></span>
+      <span class="badge accent">+ Anotar</span></a>`));
   };
 
   /* =========================================================
@@ -582,12 +749,15 @@
     const d = day();
     const tiles = [
       ['flashcards', 'cards', 'Flashcards', 'Repetição espaçada com frases de trabalho.', `${buildQueue('all').length} para hoje`, dailyDone('cards')],
+      ['caderno', 'bookmark', 'Caderno de lacunas', 'O que você quis dizer e não soube + seus erros.', `${customList().length} cartões`, false],
+      ['listening', 'phones', 'Listening', 'Diálogos de trabalho com perguntas.', `${Object.keys(S.listening || {}).length}/${DIALOGUES.length} feitos`, false],
       ['shadowing', 'wave', 'Shadowing', 'Ouça, repita e grave. Meta: 5 frases.', `${d.shadow || 0}/5 hoje`, dailyDone('shadow')],
       ['pronuncia', 'ear', 'Pronúncia', 'TH, -ED, vogais e sílaba tônica.', '6 tópicos', false],
       ['ditado', 'pen', 'Ditado', 'Escreva o que ouvir. Meta: 5 frases.', `${d.dict || 0}/5 hoje`, dailyDone('dictation')],
       ['entrevista', 'mic', 'Entrevista', '15 perguntas reais com métricas.', `${Object.keys(S.interview).length}/15 treinadas`, dailyDone('speak')],
       ['escrita', 'note', 'Escrita', 'Um tema por dia + correção com IA.', `${S.journal.length} textos`, dailyDone('writing')],
       ['erros', 'x', 'Erros de brasileiro', '26 erros que entregam o sotaque.', 'Estudo e quiz', false],
+      ...(Rec.supported ? [['minhavoz', 'rec', 'Minha voz', 'Grave hoje e compare com o dia 1.', 'Diário de voz', false]] : []),
       ['nivelamento', 'level', 'Nivelamento', 'Teste A1–C1. Refaça a cada 30 dias.', S.level ? `Nível ${S.level}` : 'Não feito', !!S.level],
       ['metodo', 'book', 'Método e imersão', 'Rotinas, o que ouvir e prompt de conversa.', 'Guia', false]
     ];
@@ -749,6 +919,7 @@
         else if (words > 0) toast('Tente falar mais: o ideal é passar de 60 palavras.');
       }
     }));
+    $('.model', sp).before(selfCompare(u.speaking.model, { title: 'Grave sua voz para se ouvir depois' }));
     el.append(sp);
 
     const fin = h(`<div class="card section">
@@ -791,7 +962,7 @@
         $$('.opt', body).forEach(b => b.onclick = () => {
           const k = +b.dataset.k, ok = k === ex.answer;
           $$('.opt', body).forEach((x, kk) => { x.disabled = true; if (kk === ex.answer) x.classList.add('correct'); });
-          if (!ok) b.classList.add('wrong');
+          if (!ok) { b.classList.add('wrong'); errorCard(u, i, ex, k); }
           show(ok); set(i, ok);
         });
       } else if (ex.type === 'fill') {
@@ -802,6 +973,7 @@
           const ok = ex.answer.map(normAns).includes(normAns(inp.value));
           inp.disabled = true; b.disabled = true; inp.blur();
           show(ok, `Resposta: <b>${esc(ex.answer[0])}</b>.`); set(i, ok);
+          if (!ok) errorCard(u, i, ex);
         };
         b.onclick = check; inp.onkeydown = e => { if (e.key === 'Enter') check(); };
       } else if (ex.type === 'order') {
@@ -822,7 +994,7 @@
           if (pool.length) { toast('Use todas as palavras.'); return; }
           const ok = normAns(picked.join(' ')) === normAns(ex.answer);
           locked = true; show(ok, `Ordem certa: <b>${esc(ex.answer)}.</b>`); set(i, ok);
-          if (ok) TTS.speak(ex.answer);
+          if (ok) TTS.speak(ex.answer); else errorCard(u, i, ex);
         };
       }
       list.append(box);
@@ -841,6 +1013,7 @@
       cards.push({ id: `pv-${i}`, deck: 'phrasal', en: term, pt, example: ex, say: ex, tag: 'Phrasal verb' }));
     BUSINESS_VOCAB.forEach(([term, ex, pt], i) =>
       cards.push({ id: `bv-${i}`, deck: 'vocab', en: term, pt, example: ex, say: ex, tag: 'Vocabulário' }));
+    customList().forEach(c => { if (c.en) cards.push({ id: 'my-' + c.id, deck: 'meus', en: c.en, pt: c.pt || '', front: c.front, note: c.note, say: c.en, tag: c.tag || (c.src === 'erro' ? 'Erro' : 'Meu caderno') }); });
     return cards;
   }
   function buildQueue(deck) {
@@ -848,7 +1021,8 @@
     const cards = allCards().filter(c => deck === 'all' || c.deck === deck);
     const due = cards.filter(c => S.cards[c.id] && S.cards[c.id].due <= t);
     const newLeft = Math.max(0, S.settings.newPerDay - (day().newSeen || 0));
-    const fresh = cards.filter(c => !S.cards[c.id]).sort((a, b) => (a.deck === 'aulas' ? 0 : 1) - (b.deck === 'aulas' ? 0 : 1)).slice(0, newLeft);
+    const pri = c => c.deck === 'meus' ? 0 : c.deck === 'aulas' ? 1 : 2;
+    const fresh = cards.filter(c => !S.cards[c.id]).sort((a, b) => pri(a) - pri(b)).slice(0, newLeft);
     return [...shuffle(due), ...fresh];
   }
   function nextIvl(st, rating) {
@@ -876,9 +1050,9 @@
     return ivl < 30 ? `${ivl}d` : `${Math.round(ivl / 30)}m`;
   }
 
-  routes.flashcards = (el) => {
-    let deck = 'all';
-    const decks = [['all', 'Todos'], ['aulas', 'Frases das aulas'], ['phrasal', 'Phrasal verbs'], ['vocab', 'Vocabulário']];
+  routes.flashcards = (el, arg) => {
+    let deck = ['meus', 'aulas', 'phrasal', 'vocab'].includes(arg) ? arg : 'all';
+    const decks = [['all', 'Todos'], ['meus', 'Meu caderno'], ['aulas', 'Frases das aulas'], ['phrasal', 'Phrasal verbs'], ['vocab', 'Vocabulário']];
     const wrap = h(`<div class="flash-wrap"></div>`);
     const header = h(`<div><div class="eyebrow">Repetição espaçada</div><h1>Flashcards</h1>
       <p class="lead">Cada cartão volta no momento em que você está prestes a esquecer. Tente <b>falar a resposta em voz alta</b> antes de virar.</p></div>`);
@@ -899,6 +1073,8 @@
           </div>
           ${q.length
           ? `<button class="btn primary block" id="start">Começar revisão (${q.length}) →</button>`
+          : deck === 'meus' && !customList().length
+          ? `<p><b>Seu caderno está vazio.</b><br><span class="muted">Anote frases que você quis dizer e não soube. Questões que você errar nas aulas também entram aqui.</span></p><a class="btn primary block" href="#caderno-novo">+ Anotar uma frase</a>`
           : `<p><b>Tudo em dia! 🎉</b><br><span class="muted">Volte amanhã. Novas frases são liberadas conforme você avança nas unidades.</span></p>`}
           <label class="small muted" style="display:block;margin-top:16px">Direção
             <select class="input" id="dir" style="display:block;width:100%;margin-top:4px">
@@ -920,13 +1096,16 @@
       const show = () => {
         if (idx >= queue.length) return end();
         const c = cur = queue[idx]; revealed = false;
-        const ptFirst = S.settings.dir === 'pt-en';
-        const front = ptFirst
+        const ptFirst = S.settings.dir === 'pt-en' || !!c.front;
+        const front = c.front
+          ? `<div class="small muted" style="margin-bottom:10px">Responda em inglês</div><div class="front" style="font-size:1.2rem">${esc(c.front)}</div>`
+          : ptFirst
           ? `<div class="small muted" style="margin-bottom:10px">Como você diria em inglês?</div><div class="front">${esc(c.pt)}</div>${c.example ? `<div class="hint">${c.deck === 'phrasal' ? 'phrasal verb' : 'termo de negócios'}</div>` : ''}`
           : `<div class="small muted" style="margin-bottom:10px">O que significa?</div><div class="front">${esc(c.en)}</div>${c.example ? `<div class="hint">"${esc(c.example)}"</div>` : ''}`;
-        const back = ptFirst
+        const back = (ptFirst
           ? `<div class="en">${esc(c.en)}</div>${c.example ? `<p style="margin:8px 0 0">"${esc(c.example)}"</p>` : ''}`
-          : `<div class="en" style="color:var(--ink)">${esc(c.pt)}</div>`;
+          : `<div class="en" style="color:var(--ink)">${esc(c.pt)}</div>`)
+          + (c.note ? `<p class="small muted" style="margin:8px 0 0">💡 ${esc(c.note)}</p>` : '');
         wrap.innerHTML = `
           <div class="row small muted"><button class="btn sm ghost" id="quit">✕ Sair</button><span class="spacer"></span><span>${Math.min(reviewed + 1, total)} / ${total}</span><span class="badge">${esc(c.tag)}</span>${S.cards[c.id] ? '' : '<span class="badge accent">novo</span>'}</div>
           <div class="progress" style="margin:8px 0 12px"><span style="width:${reviewed / Math.max(total, 1) * 100}%"></span></div>
@@ -1036,7 +1215,7 @@
           <p class="muted" style="${hide ? 'visibility:hidden' : ''}">${esc(s.pt)}</p>
           <div class="grid grid-3" style="gap:8px"><button class="btn dark" data-say="${esc(s.en)}">▶ Ouvir</button><button class="btn" data-say="${esc(s.en)}" data-rate="0.65">🐢 Lento</button><button class="btn" id="loop">🔁 3x</button></div>
           <label class="small muted" style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="hide" ${hide ? 'checked' : ''}> Modo desafio: esconder o texto</label>
-          <hr><div class="rec-slot"></div><div class="result" style="margin-top:12px"></div>
+          <hr><div class="rec-slot"></div><div class="result" style="margin-top:12px"></div><div class="self-slot"></div>
           <hr><div class="row" style="flex-wrap:nowrap"><button class="btn sm ghost" id="prev">← Anterior</button><span class="spacer"></span><button class="btn sm ghost" id="rand">Aleatória</button><button class="btn sm" id="next">Próxima →</button></div>
         </div>`;
       $$('[data-l]', box).forEach(b => b.onclick = () => { lvl = +b.dataset.l; list = SENTENCES.filter(x => x.lvl === lvl); i = 0; draw(); });
@@ -1056,6 +1235,7 @@
           if (d.shadow >= 5) markDaily('shadow');
         }
       }));
+      $('.self-slot', box).append(selfCompare(s.en));
     };
     draw();
   };
@@ -1127,7 +1307,9 @@
         $('.out', box).innerHTML = `
           <div class="row" style="flex-wrap:nowrap;align-items:flex-start"><div class="score ${scoreClass(r.score)}">${r.score}%</div><div class="diff">${r.html}</div></div>
           <p class="muted" style="margin-top:8px">${esc(s.pt)}</p>
-          <button class="btn primary block" id="nx">Próxima →</button>`;
+          <div class="stack-actions">${r.score < 90 ? '<button class="btn" id="cad">+ Salvar no caderno</button>' : ''}<button class="btn primary" id="nx">Próxima →</button></div>`;
+        const cb = $('#cad', box);
+        if (cb) cb.onclick = () => { addCustom('dt-' + SENTENCES.indexOf(s), { src: 'manual', pt: s.pt, en: s.en, tag: 'Ditado' }); cb.disabled = true; };
         $('#check', box).disabled = true;
         $('#nx', box).onclick = () => { i = (i + 1) % order.length; draw(); };
         const d = day(); d.dict = (d.dict || 0) + 1; save();
@@ -1168,6 +1350,7 @@
             <div class="rec-slot" style="margin-top:10px"></div>
             <div class="metrics" id="mt" style="margin-top:12px" hidden></div>
             <div id="fl" class="small" style="margin-top:8px"></div>
+            <div class="self-slot"></div>
           </div>
           <div class="card">
             <h3>Como responder bem</h3>
@@ -1203,9 +1386,337 @@
       });
       onCleanup(() => clearInterval(tick));
       $('.rec-slot', box).append(rec);
+      $('.self-slot', box).append(selfCompare(q.model, { title: 'Grave sua resposta e ouça depois (compare com o modelo)' }));
       if (autoplay) TTS.speak(q.q);
     };
     draw(false);
+  };
+
+  /* =========================================================
+     CADERNO DE LACUNAS
+     ========================================================= */
+  routes.caderno = (el, arg) => {
+    let filter = 'all';
+    el.append(h(`<div><div class="eyebrow">Seu material mais valioso</div><h1>Caderno de lacunas</h1>
+      <p class="lead">Quis dizer algo e não soube? Anote aqui. As questões que você errar nas aulas entram sozinhas. Tudo vira flashcard e volta na hora certa.</p></div>`));
+    const form = h(`<div class="card section" id="novo">
+      <h2 style="margin:0 0 12px">Nova frase</h2>
+      <label class="field"><span>O que você quis dizer (em português)</span>
+        <textarea class="input" id="cPt" rows="2" placeholder="Ex.: Vou te dar um retorno até sexta."></textarea></label>
+      <div class="ai-row" hidden><button class="btn sm" id="cAi" type="button">✨ Sugerir o inglês com IA</button><span class="small muted" id="cAiNote"></span></div>
+      <label class="field"><span>Como se diz em inglês</span>
+        <textarea class="input" id="cEn" rows="2" placeholder="Ex.: I'll get back to you by Friday." autocapitalize="sentences"></textarea></label>
+      <label class="field"><span>Observação (opcional)</span>
+        <input class="input" id="cNote" placeholder="Ex.: get back to = dar retorno"></label>
+      <div class="row" style="margin-top:4px;flex-wrap:nowrap"><button class="btn" id="cHear" type="button" aria-label="Ouvir em inglês">▶</button><button class="btn primary" id="cSave" style="flex:1">Salvar no caderno</button></div>
+      <p class="small muted" style="margin:10px 0 0">Não sabe o inglês? Salve só o português e complete depois. Cartões sem inglês não entram na revisão.</p>
+    </div>`);
+    el.append(form);
+    const cPt = $('#cPt', form), cEn = $('#cEn', form), cNote = $('#cNote', form);
+    try { const d = JSON.parse(localStorage.getItem('fluent90.cadDraft') || '{}'); cPt.value = d.pt || ''; cEn.value = d.en || ''; } catch (e) { }
+    const keep = () => { try { localStorage.setItem('fluent90.cadDraft', JSON.stringify({ pt: cPt.value, en: cEn.value })); } catch (e) { } };
+    cPt.oninput = keep; cEn.oninput = keep;
+    $('#cHear', form).onclick = () => { if (cEn.value.trim()) TTS.speak(cEn.value.trim()); else toast('Escreva a frase em inglês primeiro.'); };
+    let editing = null;
+    $('#cSave', form).onclick = () => {
+      const pt = cPt.value.trim(), en = cEn.value.trim(), note = cNote.value.trim();
+      if (!pt && !en) { toast('Escreva a frase primeiro.'); return; }
+      const id = editing || 'c' + Date.now().toString(36);
+      if (editing) { S.custom[id] = { ...S.custom[id], pt, en, note, at: Date.now() }; save(); toast('Cartão atualizado.'); }
+      else addCustom(id, { src: 'manual', pt, en, note, tag: 'Meu caderno' });
+      if (en && !editing) addXP(2);
+      editing = null; cPt.value = cEn.value = cNote.value = ''; keep(); $('#cSave', form).textContent = 'Salvar no caderno';
+      drawList();
+    };
+    useCap('sample').then(sample => {
+      if (!sample || !document.body.contains(form)) return;
+      const row = $('.ai-row', form); row.hidden = false;
+      const btn = $('#cAi', row), note = $('#cAiNote', row);
+      btn.onclick = async () => {
+        const pt = cPt.value.trim(); if (!pt) { toast('Escreva em português o que você quis dizer.'); return; }
+        btn.disabled = true; note.textContent = 'Pensando…';
+        try {
+          const r = await sample.json(`You are an American English teacher for a Brazilian professional (level ${S.level || 'B1'}). Translate the Portuguese sentence below into natural spoken American English, the way a native professional would say it at work. Return JSON only: {"en": "<the English sentence>", "note": "<one short tip in Brazilian Portuguese, max 15 words, about the key expression>"}.\n\nPortuguese: ${pt}`, { modelTier: 'quick' });
+          if (r && r.en) { cEn.value = String(r.en); if (r.note && !cNote.value) cNote.value = String(r.note); keep(); note.textContent = 'Confira e salve.'; TTS.speak(cEn.value); }
+          else note.textContent = 'Não consegui sugerir. Tente de novo.';
+        } catch (e) { note.textContent = e && e.code === 'not_granted' ? '' : 'Não consegui sugerir agora.'; if (e && e.code === 'not_granted') row.hidden = true; }
+        btn.disabled = false;
+      };
+    });
+
+    const listCard = h(`<div class="card section"><div class="row"><h2 style="margin:0">Seus cartões</h2><span class="spacer"></span><a class="btn sm primary" href="#flashcards-meus">Revisar →</a></div>
+      <div class="tabs scroll" style="margin-top:12px"></div><div class="cad-list"></div></div>`);
+    el.append(listCard);
+    const drawList = () => {
+      const all = customList();
+      const items = all.filter(c => filter === 'all' || (filter === 'erro' ? c.src === 'erro' : c.src !== 'erro'));
+      $('.tabs', listCard).innerHTML = [['all', `Todos (${all.length})`], ['manual', `Anotados (${all.filter(c => c.src !== 'erro').length})`], ['erro', `Dos erros (${all.filter(c => c.src === 'erro').length})`]]
+        .map(([k, n]) => `<button class="tab ${k === filter ? 'active' : ''}" data-f="${k}">${n}</button>`).join('');
+      $$('[data-f]', listCard).forEach(b => b.onclick = () => { filter = b.dataset.f; drawList(); });
+      const box = $('.cad-list', listCard);
+      if (!items.length) { box.innerHTML = '<p class="muted small" style="margin:12px 0 0">Nada aqui ainda.</p>'; return; }
+      box.innerHTML = '';
+      items.forEach(c => {
+        const srs = S.cards['my-' + c.id];
+        const when = !c.en ? '<span class="badge yellow">falta o inglês</span>' : !srs ? '<span class="badge accent">novo</span>' : srs.due <= todayKey() ? '<span class="badge">revisar hoje</span>' : `<span class="small muted">volta ${srs.due.split('-').reverse().slice(0, 2).join('/')}</span>`;
+        const row = h(`<div class="cad-item">
+          <div class="cad-txt">
+            <div class="small muted">${esc(c.front || c.pt || '')}</div>
+            <div class="cad-en">${c.en ? esc(c.en) : '—'}</div>
+            ${c.note ? `<div class="small muted">💡 ${esc(c.note)}</div>` : ''}
+            <div class="row" style="gap:6px;margin-top:6px"><span class="badge">${esc(c.tag || (c.src === 'erro' ? 'Erro' : 'Meu caderno'))}</span>${when}</div>
+          </div>
+          <div class="cad-act">${c.en ? sayBtn(c.en) : ''}${c.src !== 'erro' ? '<button class="icon-btn" data-edit aria-label="Editar">✎</button>' : ''}<button class="icon-btn" data-del aria-label="Apagar">🗑</button></div></div>`);
+        const ed = $('[data-edit]', row);
+        if (ed) ed.onclick = () => { editing = c.id; cPt.value = c.pt || ''; cEn.value = c.en || ''; cNote.value = c.note || ''; $('#cSave', form).textContent = 'Salvar alteração'; form.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+        const del = $('[data-del]', row); let armed = null;
+        del.onclick = () => {
+          if (!armed) { del.textContent = 'Apagar?'; del.classList.add('armed'); armed = setTimeout(() => { armed = null; del.textContent = '🗑'; del.classList.remove('armed'); }, 3000); return; }
+          clearTimeout(armed); removeCustom(c.id); drawList(); toast('Cartão apagado.');
+        };
+        box.append(row);
+      });
+    };
+    drawList();
+    if (arg === 'novo') setTimeout(() => { form.scrollIntoView({ block: 'start' }); cPt.focus({ preventScroll: true }); }, 50);
+  };
+
+  /* =========================================================
+     LISTENING (diálogos com duas vozes)
+     ========================================================= */
+  const LVL_NAME = { 1: 'Fácil', 2: 'Médio', 3: 'Difícil' };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  routes.listening = (el, arg) => {
+    const d = arg && DIALOGUES.find(x => x.id === +arg);
+    if (!d) {
+      el.append(h(`<div><div class="eyebrow">Treino de compreensão</div><h1>Listening</h1>
+        <p class="lead">Conversas reais de trabalho com duas vozes. Ouça <b>sem ler</b>, responda as perguntas, depois leia a transcrição e faça o papel de um dos personagens.</p></div>`));
+      [1, 2, 3].forEach(l => {
+        const list = DIALOGUES.filter(x => x.lvl === l); if (!list.length) return;
+        el.append(h(`<div class="card section"><h2 style="margin:0 0 6px">${LVL_NAME[l]}</h2>${list.map(x => {
+          const st = (S.listening || {})[x.id];
+          return `<a class="week" href="#listening-${x.id}" style="color:inherit;grid-template-columns:1fr auto">
+            <div><b>${esc(x.title)}</b><div class="small muted">${esc(x.titlePt)}</div></div>
+            <div>${st ? `<span class="badge green">✓ ${st.best}/${x.questions.length}</span>` : '<span class="badge">novo</span>'}</div></a>`;
+        }).join('')}</div>`));
+      });
+      return;
+    }
+
+    const names = { a: d.speakers.a.split(' · ')[0], b: d.speakers.b.split(' · ')[0] };
+    el.append(h(`<div>
+      <a href="#listening" class="small">← Diálogos</a>
+      <div class="eyebrow" style="margin-top:12px">Listening · ${LVL_NAME[d.lvl]}</div>
+      <h1>${esc(d.title)}</h1>
+      <p class="lead">${esc(d.titlePt)}. ${esc(d.context)}</p>
+      <div class="row"><span class="who a">${esc(d.speakers.a)}</span><span class="who b">${esc(d.speakers.b)}</span></div>
+    </div>`));
+
+    let token = 0;
+    const stopAll = () => { token++; TTS.stop(); $$('.dlg-line.on', el).forEach(x => x.classList.remove('on')); };
+    onCleanup(() => { token++; });
+    const mark = i => { $$('.dlg-line', el).forEach(x => x.classList.toggle('on', +x.dataset.i === i)); };
+
+    // 1. ouvir
+    const p1 = h(`<div class="card section lesson-block">
+      <h2><span class="n">1</span>Ouça sem ler</h2>
+      <p class="small muted" style="margin-top:-4px">Ouça o diálogo inteiro uma ou duas vezes antes de responder. Use fone de ouvido.</p>
+      <div class="grid grid-3" style="gap:8px"><button class="btn dark" id="pAll">▶ Ouvir</button><button class="btn" id="pSlow">🐢 Devagar</button><button class="btn" id="pStop">■ Parar</button></div>
+      <div class="now small muted" style="margin-top:10px">&nbsp;</div></div>`);
+    const now = $('.now', p1);
+    const play = async rate => {
+      stopAll(); const tok = token;
+      for (let i = 0; i < d.lines.length; i++) {
+        if (tok !== token) return;
+        const [who, en] = d.lines[i];
+        now.innerHTML = `Fala ${i + 1} de ${d.lines.length} · <b class="who-txt ${who}">${esc(names[who])}</b>`;
+        mark(i);
+        await TTS.speak(en, rate, { alt: who === 'b' });
+        if (tok !== token) return;
+        await sleep(350);
+      }
+      if (tok === token) { now.innerHTML = 'Fim do diálogo. Responda as perguntas abaixo.'; mark(-1); }
+    };
+    $('#pAll', p1).onclick = () => play();
+    $('#pSlow', p1).onclick = () => play(Math.max(0.7, S.settings.rate - 0.25));
+    $('#pStop', p1).onclick = () => { stopAll(); now.innerHTML = '&nbsp;'; };
+    el.append(p1);
+
+    // 2. perguntas
+    const p2 = h(`<div class="card section lesson-block"><h2><span class="n">2</span>Perguntas</h2><div class="qs"></div><div class="q-sum"></div></div>`);
+    const res = new Array(d.questions.length).fill(null);
+    d.questions.forEach((q, qi) => {
+      const box = h(`<div class="ex"><div class="ex-q">${qi + 1}. ${esc(q.q)}</div><div class="opts">${q.options.map((o, k) => `<button class="opt" data-k="${k}">${esc(o)}</button>`).join('')}</div><div class="feedback"></div></div>`);
+      $$('.opt', box).forEach(b => b.onclick = () => {
+        if (res[qi] !== null) return;
+        const k = +b.dataset.k, ok = k === q.answer; res[qi] = ok;
+        $$('.opt', box).forEach((x, kk) => { x.disabled = true; if (kk === q.answer) x.classList.add('correct'); });
+        if (!ok) b.classList.add('wrong');
+        const fb = $('.feedback', box); fb.className = 'feedback show ' + (ok ? 'ok' : 'no'); fb.innerHTML = (ok ? '✓ Correto! ' : '✕ ') + esc(q.explain);
+        if (res.every(r => r !== null)) finish();
+      });
+      $('.qs', p2).append(box);
+    });
+    const finish = () => {
+      const ok = res.filter(Boolean).length, n = res.length;
+      const prev = (S.listening || {})[d.id] || { best: 0, times: 0 };
+      S.listening[d.id] = { best: Math.max(prev.best || 0, ok), times: (prev.times || 0) + 1, at: Date.now() }; save();
+      addXP(ok * 4); markDaily('dictation');
+      $('.q-sum', p2).innerHTML = `<div class="notice ${ok / n >= 0.75 ? '' : 'warn'}" style="margin-top:14px"><b>${ok}/${n} acertos</b> · +${ok * 4} XP. ${ok === n ? 'Excelente! Agora leia a transcrição e faça o role-play.' : 'Leia a transcrição, ouça de novo as falas que você perdeu e repita.'}</div>`;
+      showTranscript();
+    };
+    el.append(p2);
+
+    // 3. transcrição
+    const p3 = h(`<div class="card section lesson-block"><h2><span class="n">3</span>Transcrição</h2>
+      <div class="t-locked"><p class="small muted">Responda as perguntas primeiro: ler antes estraga o treino de ouvido.</p><button class="btn sm ghost" id="peek">Mostrar mesmo assim</button></div>
+      <div class="t-body" hidden>
+        <label class="small muted" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="showPt"> Mostrar tradução</label>
+        <div class="dlg">${d.lines.map(([who, en, pt], i) => `<div class="dlg-line ${who}" data-i="${i}">
+          <div class="dlg-who">${esc(names[who])}</div>
+          <div class="dlg-txt"><div class="en">${esc(en)}</div><div class="pt" hidden>${esc(pt)}</div></div>
+          <div class="dlg-btns"><button class="icon-btn" data-line="${i}" aria-label="Ouvir fala">▶</button><button class="icon-btn" data-line="${i}" data-slow="1" aria-label="Ouvir devagar">🐢</button></div></div>`).join('')}</div>
+        <button class="btn sm ghost" id="addAll" style="margin-top:12px">+ Salvar falas de ${esc(names.b)} no caderno</button>
+      </div></div>`);
+    const showTranscript = () => { $('.t-locked', p3).hidden = true; $('.t-body', p3).hidden = false; p4.hidden = false; };
+    $('#peek', p3).onclick = showTranscript;
+    $('#showPt', p3).onchange = e => $$('.dlg .pt', p3).forEach(x => x.hidden = !e.target.checked);
+    $$('[data-line]', p3).forEach(b => b.onclick = () => {
+      stopAll(); const i = +b.dataset.line, [who, en] = d.lines[i];
+      mark(i); TTS.speak(en, b.dataset.slow ? 0.7 : undefined, { alt: who === 'b' }).then(() => { if (!$$('.dlg-line.on', el).length || +$('.dlg-line.on', el).dataset.i === i) mark(-1); });
+    });
+    $('#addAll', p3).onclick = e => {
+      let n = 0;
+      d.lines.forEach(([who, en, pt], i) => { if (who === 'b' && addCustom(`dl-${d.id}-${i}`, { src: 'manual', pt, en, tag: 'Listening' }, true)) n++; });
+      toast(n ? `✓ ${n} frases salvas no caderno.` : 'Essas frases já estão no seu caderno.'); e.currentTarget.disabled = true;
+    };
+    el.append(p3);
+
+    // 4. role-play
+    const p4 = h(`<div class="card section lesson-block" hidden><h2><span class="n">4</span>Role-play</h2>
+      <p class="small">Agora você é <b>${esc(d.speakers.b)}</b>. O app fala as falas de ${esc(names.a)}; quando chegar a sua vez, a fala aparece destacada: leia em voz alta, no mesmo ritmo.</p>
+      <div class="grid grid-2" style="gap:8px"><button class="btn primary" id="rpGo">▶ Começar role-play</button><button class="btn" id="rpStop">■ Parar</button></div>
+      <div class="rp-now" style="margin-top:12px"></div>
+      <div class="self-slot" style="margin-top:6px"></div></div>`);
+    const rpNow = $('.rp-now', p4);
+    $('#rpGo', p4).onclick = async () => {
+      stopAll(); const tok = token;
+      for (let i = 0; i < d.lines.length; i++) {
+        if (tok !== token) return;
+        const [who, en] = d.lines[i]; mark(i);
+        if (who === 'a') {
+          rpNow.innerHTML = `<div class="small muted">${esc(names.a)}:</div><div class="big-sentence" style="font-size:1.05rem;opacity:.75">${esc(en)}</div>`;
+          await TTS.speak(en, undefined, { alt: false });
+        } else {
+          const ms = Math.max(2500, en.split(/\s+/).length * 480 + 1500);
+          rpNow.innerHTML = `<div class="small" style="color:var(--accent)"><b>Sua vez:</b></div><div class="big-sentence rp-you" style="font-size:1.15rem">${esc(en)}</div><div class="rp-bar"><span style="animation-duration:${ms}ms"></span></div>`;
+          await sleep(ms);
+        }
+        if (tok !== token) return;
+        await sleep(300);
+      }
+      if (tok === token) { mark(-1); rpNow.innerHTML = '<div class="notice">Muito bem! Repita até conseguir acompanhar sem travar. Depois tente sem olhar o texto.</div>'; addXP(5); }
+    };
+    $('#rpStop', p4).onclick = () => { stopAll(); rpNow.innerHTML = ''; };
+    $('.self-slot', p4).append(selfCompare(null, { title: `Grave-se lendo as falas de ${names.b} e ouça depois` }));
+    el.append(p4);
+
+    const idx = DIALOGUES.indexOf(d);
+    el.append(h(`<div class="row section">${idx > 0 ? `<a class="btn sm ghost" href="#listening-${DIALOGUES[idx - 1].id}">← Anterior</a>` : ''}<span class="spacer"></span>${idx < DIALOGUES.length - 1 ? `<a class="btn sm" href="#listening-${DIALOGUES[idx + 1].id}">Próximo diálogo →</a>` : ''}</div>`));
+  };
+
+  /* =========================================================
+     MINHA VOZ (diário de gravações: dia 1 × dia 30)
+     ========================================================= */
+  routes.minhavoz = (el) => {
+    el.append(h(`<div><div class="eyebrow">Diário de voz</div><h1>Minha voz</h1>
+      <p class="lead">Grave a mesma resposta de tempos em tempos. Ouvir o seu dia 1 ao lado do dia 30 mostra a evolução de um jeito que nenhum número mostra.</p></div>`));
+    if (!Rec.supported) {
+      el.append(h(`<div class="notice section">${IN_FRAME
+        ? 'Dentro do claude.ai a página não tem acesso ao áudio do microfone, então não dá para gravar sua voz aqui. Abra o app pelo link da Vercel (ou pelo iniciar.bat no computador) para usar o diário de voz.'
+        : 'Este navegador não permite gravar áudio. Tente pelo Chrome, Edge ou Safari atualizados.'}</div>`));
+      return;
+    }
+    const QS = INTERVIEW.slice(0, 5);
+    let qi = 0;
+    try { qi = Math.min(QS.length - 1, +(localStorage.getItem('fluent90.voiceQ') || 0)); } catch (e) { }
+    const box = h(`<div class="section"></div>`); el.append(box);
+    let sess = null, tick = null;
+    onCleanup(() => { clearInterval(tick); if (sess) sess.cancel(); });
+
+    const draw = async () => {
+      const q = QS[qi];
+      box.innerHTML = `
+        <div class="tabs scroll">${QS.map((x, k) => `<button class="tab ${k === qi ? 'active' : ''}" data-q="${k}">${esc(x.q.replace(/\?$|\.$/, ''))}</button>`).join('')}</div>
+        <div class="card">
+          <div class="eyebrow">Pergunta</div>
+          <div class="big-sentence">“${esc(q.q)}”</div>
+          <p class="muted small">${esc(q.pt)} · Responda em 60 a 90 segundos, como numa entrevista.</p>
+          <div class="row"><button class="btn dark" data-say="${esc(q.q)}">▶ Ouvir pergunta</button></div>
+          <hr>
+          <div class="vrec"><button class="btn rec" id="vRec">⏺ Gravar resposta</button><div class="timer" id="vTm">0:00</div></div>
+          <div class="v-new"></div>
+        </div>
+        <div class="card"><div class="row"><h3 style="margin:0">Suas gravações</h3><span class="spacer"></span><span class="small muted">ficam só neste aparelho</span></div><div class="v-list"><p class="small muted">Carregando…</p></div></div>`;
+      $$('[data-q]', box).forEach(b => b.onclick = () => { if (sess) return; qi = +b.dataset.q; try { localStorage.setItem('fluent90.voiceQ', qi); } catch (e) { } draw(); });
+      const btn = $('#vRec', box), tm = $('#vTm', box), nw = $('.v-new', box);
+      btn.onclick = async () => {
+        if (sess) {
+          const s = sess; sess = null; clearInterval(tick);
+          btn.classList.remove('live'); btn.textContent = '⏺ Gravar de novo';
+          const r = await s.stop();
+          if (r.secs < 3 || !r.blob.size) { toast('Gravação muito curta.'); return; }
+          tm.textContent = fmt(r.secs);
+          nw.innerHTML = `<div class="notice" style="margin-top:12px"><b>Gravação pronta (${fmt(r.secs)}).</b> Ouça e salve no seu diário.</div>
+            <div class="stack-actions" style="margin-top:10px"><button class="btn" id="vPlay">▶ Ouvir</button><button class="btn primary" id="vSave">Salvar no diário</button><button class="btn ghost" id="vDrop">Descartar</button></div>`;
+          $('#vPlay', nw).onclick = () => playBlob(r.blob);
+          $('#vDrop', nw).onclick = () => { nw.innerHTML = ''; tm.textContent = '0:00'; };
+          $('#vSave', nw).onclick = async () => {
+            try {
+              await AudioStore.put({ id: 'v' + Date.now(), at: Date.now(), date: todayKey(), day: dayNumber(), q: qi, secs: r.secs, blob: r.blob });
+              addXP(10); markDaily('speak'); toast('✓ Gravação salva no diário.'); draw();
+            } catch (e) { toast('Não foi possível salvar neste navegador.'); }
+          };
+          return;
+        }
+        btn.disabled = true;
+        const s = await Rec.start(180);
+        btn.disabled = false;
+        if (!s) return;
+        sess = s; nw.innerHTML = ''; btn.classList.add('live'); btn.textContent = '■ Parar';
+        tick = setInterval(() => { tm.textContent = fmt((Date.now() - s.t0) / 1000); }, 250);
+      };
+
+      const list = $('.v-list', box);
+      let clips = [];
+      try { clips = (await AudioStore.all()).filter(c => c.q === qi); }
+      catch (e) { list.innerHTML = '<p class="small muted">Este navegador não deixa guardar gravações (modo anônimo?).</p>'; return; }
+      if (!document.body.contains(list)) return;
+      if (!clips.length) { list.innerHTML = '<p class="small muted" style="margin:10px 0 0">Nenhuma gravação desta pergunta ainda. A primeira vira o seu <b>marco zero</b>.</p>'; return; }
+      const first = clips[0], last = clips[clips.length - 1];
+      const next = addDays(last.date, 30);
+      list.innerHTML = `
+        ${clips.length > 1 ? `<button class="btn primary block" id="vCmp" style="margin:10px 0">⇄ Ouvir o dia ${first.day} e depois o dia ${last.day}</button>` : ''}
+        <p class="small muted" style="margin:6px 0">Próxima gravação sugerida: <b>${next <= todayKey() ? 'hoje' : next.split('-').reverse().join('/')}</b>. Grave a cada 30 dias para comparar.</p>
+        ${clips.map((c, k) => `<div class="v-item"><button class="icon-btn" data-play="${c.id}" aria-label="Ouvir">▶</button>
+          <div style="flex:1;min-width:0"><b>Dia ${c.day}</b>${k === 0 ? ' <span class="badge accent">marco zero</span>' : ''}<div class="small muted">${c.date.split('-').reverse().join('/')} · ${fmt(c.secs)}</div></div>
+          <button class="icon-btn" data-vdel="${c.id}" aria-label="Apagar gravação">🗑</button></div>`).join('')}`;
+      const byId = id => clips.find(c => c.id === id);
+      $$('[data-play]', list).forEach(b => b.onclick = () => { TTS.stop(); playBlob(byId(b.dataset.play).blob); });
+      const cmp = $('#vCmp', list);
+      if (cmp) cmp.onclick = async () => { cmp.disabled = true; await playBlob(first.blob); await sleep(700); await playBlob(last.blob); cmp.disabled = false; };
+      $$('[data-vdel]', list).forEach(b => {
+        let armed = null;
+        b.onclick = async () => {
+          if (!armed) { b.textContent = 'Apagar?'; b.classList.add('armed'); armed = setTimeout(() => { armed = null; b.textContent = '🗑'; b.classList.remove('armed'); }, 3000); return; }
+          clearTimeout(armed);
+          try { await AudioStore.del(b.dataset.vdel); toast('Gravação apagada.'); } catch (e) { }
+          draw();
+        };
+      });
+    };
+    draw();
   };
 
   /* =========================================================
@@ -1275,7 +1786,8 @@
         const c = h(`<div class="card">
           <div class="mistake"><div class="w">${esc(m.wrong)}</div><div class="r" ${quiz ? 'hidden' : ''}>${esc(m.right)}</div></div>
           <div class="why small muted" style="margin-top:8px" ${quiz ? 'hidden' : ''}>${esc(m.why)}</div>
-          <div class="row" style="margin-top:10px">${quiz ? '<button class="btn sm reveal">Pensei na correção. Mostrar</button>' : ''}${sayBtn(m.right.split(' / ')[0].replace(/\(.*?\)/g, ''))}<span class="small muted">ouvir a forma correta</span></div></div>`);
+          <div class="row" style="margin-top:10px">${quiz ? '<button class="btn sm reveal">Pensei na correção. Mostrar</button>' : ''}${sayBtn(m.right.split(' / ')[0].replace(/\(.*?\)/g, ''))}<span class="small muted">ouvir</span><span class="spacer"></span><button class="btn sm ghost add-cad">+ Caderno</button></div></div>`);
+        $('.add-cad', c).onclick = () => addCustom('mis-' + MISTAKES.indexOf(m), { src: 'erro', front: `Corrija: “${m.wrong}”`, en: m.right.split(' / ')[0].replace(/\(.*?\)/g, '').replace(/\s+/g, ' ').replace(/\s+([.,!?])/g, '$1').trim(), note: m.why, tag: 'Erro de brasileiro' });
         const rv = $('.reveal', c);
         if (rv) rv.onclick = () => { $('.r', c).hidden = false; $('.why', c).hidden = false; rv.remove(); addXP(1); };
         list.append(c);

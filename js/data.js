@@ -738,8 +738,197 @@ const DAILY_TASKS = [
   { id: "cards", label: "Revisar flashcards", min: 15, link: "#flashcards", desc: "Repetição espaçada: o algoritmo decide o que você precisa rever." },
   { id: "lesson", label: "Aula da semana", min: 15, link: "lesson", desc: "Gramática aplicada, frases-chave e exercícios." },
   { id: "shadow", label: "Shadowing / pronúncia", min: 10, link: "#shadowing", desc: "Ouça, repita junto, grave e compare." },
-  { id: "dictation", label: "Ditado", min: 5, link: "#ditado", desc: "Treine o ouvido escrevendo o que ouve." },
+  { id: "dictation", label: "Ditado ou listening", min: 5, link: "#listening", desc: "Treine o ouvido: um diálogo de trabalho ou 5 frases de ditado." },
   { id: "speak", label: "Falar: simulador ou tarefa da aula", min: 10, link: "#entrevista", desc: "Pelo menos 3 minutos falando em voz alta." },
   { id: "immersion", label: "Imersão (fora do app)", min: 20, link: "#metodo", desc: "Podcast, série ou YouTube em inglês. Marque quando fizer." },
   { id: "writing", label: "Escrita curta", min: 5, link: "#escrita", desc: "5 a 8 frases sobre o tema do dia." }
+];
+
+/* ---------------- LISTENING: diálogos de trabalho ----------------
+   a = voz 1 (feminina), b = voz 2. Você faz o papel de "b" no role-play. */
+const DIALOGUES = [
+  {
+    id: 1, lvl: 1, title: "Recruiter screening call", titlePt: "Ligação de triagem com a recrutadora",
+    context: "Uma recrutadora americana liga para um candidato brasileiro depois de ver o currículo dele.",
+    speakers: { a: "Sarah · recrutadora", b: "Lucas · candidato" },
+    lines: [
+      ["a", "Hi, is this Lucas? This is Sarah from BrightPath Recruiting. Is now still a good time to talk?", "Oi, é o Lucas? Aqui é a Sarah, da BrightPath Recruiting. Ainda é um bom momento para conversarmos?"],
+      ["b", "Hi Sarah, yes, perfect timing. Thanks for calling.", "Oi Sarah, sim, momento perfeito. Obrigado por ligar."],
+      ["a", "Great. So, I saw your application for the marketing analyst position. Can you tell me a little about your current role?", "Ótimo. Então, vi sua candidatura para a vaga de analista de marketing. Pode me contar um pouco sobre sua função atual?"],
+      ["b", "Sure. I'm a marketing coordinator at a retail company. I manage our social media campaigns and I analyze the results every week.", "Claro. Sou coordenador de marketing em uma empresa de varejo. Gerencio nossas campanhas de redes sociais e analiso os resultados toda semana."],
+      ["a", "Nice. And how long have you been there?", "Legal. E há quanto tempo você está lá?"],
+      ["b", "I've been there for about four years.", "Estou lá há uns quatro anos."],
+      ["a", "Okay. The role is fully remote, but the team is based in Chicago, so you'd work mostly on Central Time. Would that be a problem?", "Certo. A vaga é 100% remota, mas o time fica em Chicago, então você trabalharia principalmente no fuso Central. Isso seria um problema?"],
+      ["b", "Not at all. The time difference is only two or three hours, so it works well for me.", "De jeito nenhum. A diferença de fuso é de só duas ou três horas, então funciona bem para mim."],
+      ["a", "Perfect. The next step is a video interview with the hiring manager. Are you available next Tuesday afternoon?", "Perfeito. A próxima etapa é uma entrevista por vídeo com o gestor da vaga. Você está disponível na próxima terça à tarde?"],
+      ["b", "Yes, Tuesday afternoon works. Could you send me the details by email?", "Sim, terça à tarde dá certo. Você poderia me mandar os detalhes por e-mail?"],
+      ["a", "Of course. I'll send you an invite today. Talk soon!", "Claro. Vou te mandar um convite hoje. Até breve!"],
+      ["b", "Thank you, Sarah. Have a great day.", "Obrigado, Sarah. Tenha um ótimo dia."]
+    ],
+    questions: [
+      { q: "What is Lucas's current job?", options: ["Marketing analyst", "Marketing coordinator", "Recruiter", "Sales manager"], answer: 1, explain: "Ele diz: “I'm a marketing coordinator at a retail company.” Analista é a vaga que ele quer." },
+      { q: "How long has he worked there?", options: ["About two years", "About three hours", "About four years", "Since Tuesday"], answer: 2, explain: "“I've been there for about four years.” Present perfect + for = tempo até hoje." },
+      { q: "Where is the team based?", options: ["São Paulo", "Chicago", "New York", "Anywhere, it's remote"], answer: 1, explain: "“The team is based in Chicago.” Be based in = ficar sediado em." },
+      { q: "What is the next step?", options: ["An English test", "A video interview with the hiring manager", "He starts working on Tuesday", "He sends his résumé again"], answer: 1, explain: "“The next step is a video interview with the hiring manager.”" }
+    ]
+  },
+  {
+    id: 2, lvl: 1, title: "Daily stand-up meeting", titlePt: "Reunião diária rápida do time",
+    context: "Reunião de 10 minutos em que cada pessoa diz o que fez ontem, o que vai fazer hoje e o que está travando.",
+    speakers: { a: "Emily · gestora", b: "Rafael · analista" },
+    lines: [
+      ["a", "Morning, everyone. Let's keep it quick. Rafael, do you want to start?", "Bom dia, pessoal. Vamos ser rápidos. Rafael, quer começar?"],
+      ["b", "Sure. Yesterday I finished the dashboard for the sales team. Today I'm going to test it with real data.", "Claro. Ontem terminei o dashboard do time de vendas. Hoje vou testá-lo com dados reais."],
+      ["a", "Great. Any blockers?", "Ótimo. Algum impedimento?"],
+      ["b", "Yes, one. I still don't have access to the customer database. I asked IT on Monday, but they haven't answered yet.", "Sim, um. Ainda não tenho acesso ao banco de dados de clientes. Pedi para a TI na segunda, mas eles ainda não responderam."],
+      ["a", "Okay, I'll follow up with them after this meeting. Anything else?", "Ok, vou cobrar eles depois desta reunião. Mais alguma coisa?"],
+      ["b", "No, that's it. Oh, actually, I'll be out on Friday afternoon. I have a doctor's appointment.", "Não, é isso. Ah, na verdade, vou estar fora na sexta à tarde. Tenho consulta médica."],
+      ["a", "No problem. Just add it to the team calendar, please.", "Sem problema. Só coloque no calendário do time, por favor."],
+      ["b", "Will do. Thanks, Emily.", "Pode deixar. Obrigado, Emily."]
+    ],
+    questions: [
+      { q: "What did Rafael finish yesterday?", options: ["A sales report", "The dashboard for the sales team", "The customer database", "The team calendar"], answer: 1, explain: "“Yesterday I finished the dashboard for the sales team.”" },
+      { q: "What is his blocker?", options: ["He is sick", "He doesn't have access to the customer database", "The dashboard has errors", "IT deleted his data"], answer: 1, explain: "Blocker = o que impede o trabalho. “I still don't have access to the customer database.”" },
+      { q: "What will Emily do?", options: ["Follow up with IT", "Test the dashboard", "Cancel Friday's meeting", "Call the doctor"], answer: 0, explain: "“I'll follow up with them.” Follow up = cobrar, dar seguimento." },
+      { q: "Why will Rafael be out on Friday?", options: ["He's on vacation", "He has a doctor's appointment", "He has a training", "He has a client meeting"], answer: 1, explain: "Appointment = consulta/horário marcado." }
+    ]
+  },
+  {
+    id: 3, lvl: 1, title: "Video call: tech issues and small talk", titlePt: "Chamada de vídeo: problemas técnicos e conversa inicial",
+    context: "O começo de uma call com uma cliente dos EUA: problemas de conexão e aquela conversa rápida antes de começar.",
+    speakers: { a: "Nicole · cliente", b: "Carlos · consultor" },
+    lines: [
+      ["a", "Hi Carlos! Can you hear me okay?", "Oi Carlos! Está me ouvindo bem?"],
+      ["b", "Hi Nicole! Yes, I can hear you, but your video is frozen.", "Oi Nicole! Sim, estou te ouvindo, mas seu vídeo está travado."],
+      ["a", "Oh, sorry. My connection is a bit unstable today. Let me turn off my camera for a second.", "Ah, desculpa. Minha conexão está meio instável hoje. Deixa eu desligar a câmera um instante."],
+      ["b", "No worries. Now your audio is much better.", "Sem problema. Agora seu áudio está bem melhor."],
+      ["a", "Great. So, how's the weather down there in Brazil?", "Ótimo. E aí, como está o tempo aí no Brasil?"],
+      ["b", "It's really hot! It's summer here, about thirty-five degrees. How about Boston?", "Está muito quente! Aqui é verão, uns trinta e cinco graus. E em Boston?"],
+      ["a", "Freezing! We had snow all weekend. I'm so jealous.", "Congelando! Nevou o fim de semana inteiro. Que inveja."],
+      ["b", "You should come visit! Okay, should we get started? I'll share my screen.", "Você devia vir visitar! Bom, vamos começar? Vou compartilhar minha tela."],
+      ["a", "Sounds good. I can see your screen now.", "Combinado. Já estou vendo sua tela."],
+      ["b", "Perfect. So, the first slide shows our results from last month.", "Perfeito. Então, o primeiro slide mostra nossos resultados do mês passado."]
+    ],
+    questions: [
+      { q: "What's wrong with Nicole's video?", options: ["It's frozen", "There's no sound", "It's too dark", "It's the wrong person"], answer: 0, explain: "“Your video is frozen.” Frozen = travado/congelado." },
+      { q: "What does Nicole do to fix the problem?", options: ["She turns off her camera", "She restarts her computer", "She calls him on the phone", "She leaves the call"], answer: 0, explain: "“Let me turn off my camera for a second.” Turn off = desligar." },
+      { q: "What's the weather like in Boston?", options: ["Hot", "Rainy", "Snowy and freezing", "Sunny"], answer: 2, explain: "“Freezing! We had snow all weekend.”" },
+      { q: "How does Carlos start the meeting?", options: ["He shares his screen", "He sends an email", "He turns on his camera", "He ends the call"], answer: 0, explain: "“I'll share my screen.” Muito usado em reuniões online." }
+    ]
+  },
+  {
+    id: 4, lvl: 1, title: "First day at a new job", titlePt: "Primeiro dia no emprego novo",
+    context: "A colega responsável pela integração recebe o novo funcionário e explica como vai ser o dia.",
+    speakers: { a: "Jessica · colega de integração", b: "Gabriel · novo funcionário" },
+    lines: [
+      ["a", "Welcome to the team, Gabriel! I'm Jessica, your onboarding buddy. How was the commute?", "Bem-vindo ao time, Gabriel! Sou a Jessica, sua parceira de integração. Como foi o trajeto?"],
+      ["b", "Thanks, Jessica! It was fine, only twenty minutes by train.", "Obrigado, Jessica! Foi tranquilo, só vinte minutos de trem."],
+      ["a", "Good. So, this morning you'll set up your laptop and your accounts. IT will meet you at eleven.", "Que bom. Então, hoje de manhã você vai configurar seu notebook e suas contas. A TI vai te encontrar às onze."],
+      ["b", "Okay. And who should I talk to if I have questions about my tasks?", "Certo. E com quem eu falo se tiver dúvidas sobre minhas tarefas?"],
+      ["a", "Your manager, David, but he's traveling until Wednesday. In the meantime, you can always ask me.", "Com seu gestor, o David, mas ele está viajando até quarta. Enquanto isso, pode sempre perguntar para mim."],
+      ["b", "That's great, thank you. Is there a team lunch today?", "Ótimo, obrigado. Tem almoço com o time hoje?"],
+      ["a", "Yes, we're going out at twelve thirty to welcome you. It's on the company.", "Sim, vamos sair ao meio-dia e meia para te dar as boas-vindas. A empresa paga."],
+      ["b", "Oh, that's so nice! Do I need to bring anything to the meeting this afternoon?", "Ah, que legal! Preciso levar alguma coisa para a reunião da tarde?"],
+      ["a", "Just your laptop and a notebook. It's an intro to our main clients and tools.", "Só o notebook e um caderno. É uma introdução aos nossos principais clientes e ferramentas."],
+      ["b", "Perfect. I'm really excited to get started.", "Perfeito. Estou muito animado para começar."]
+    ],
+    questions: [
+      { q: "How did Gabriel get to work?", options: ["By car", "By bus", "By train", "On foot"], answer: 2, explain: "“Only twenty minutes by train.” Commute = trajeto casa-trabalho." },
+      { q: "When will IT meet him?", options: ["At eleven", "At twelve thirty", "In twenty minutes", "On Wednesday"], answer: 0, explain: "“IT will meet you at eleven.”" },
+      { q: "Why can't he ask his manager today?", options: ["He's sick", "He's traveling", "He's in a meeting", "He left the company"], answer: 1, explain: "“He's traveling until Wednesday.”" },
+      { q: "What does “It's on the company” mean?", options: ["The company pays", "Lunch is at the office", "It's mandatory", "It's on the calendar"], answer: 0, explain: "“It's on me / on the company” = eu pago / a empresa paga." }
+    ]
+  },
+  {
+    id: 5, lvl: 2, title: "Rescheduling a client call", titlePt: "Remarcando uma call com cliente",
+    context: "Uma cliente liga para mudar o horário da reunião e pede material extra.",
+    speakers: { a: "Megan · cliente", b: "Bruno · gerente de contas" },
+    lines: [
+      ["a", "Hi Bruno, it's Megan from Northwind. I'm calling about our call on Thursday.", "Oi Bruno, é a Megan, da Northwind. Estou ligando sobre nossa call de quinta."],
+      ["b", "Hi Megan. Is everything okay?", "Oi Megan. Está tudo bem?"],
+      ["a", "Yes, but something came up, and I won't be able to make it at ten. Could we push it back to the afternoon?", "Sim, mas surgiu um imprevisto e não vou conseguir às dez. Podemos passar para a tarde?"],
+      ["b", "Let me check my calendar. I'm tied up until two, but I'm free from two thirty on.", "Deixa eu ver minha agenda. Estou ocupado até as duas, mas fico livre a partir das duas e meia."],
+      ["a", "Two thirty works for me. Can we also make it forty-five minutes instead of thirty? I'd like my finance director to join us.", "Duas e meia funciona para mim. Podemos também fazer em quarenta e cinco minutos em vez de trinta? Quero que minha diretora financeira participe."],
+      ["b", "Sure, that makes sense. Should I prepare anything specific for her?", "Claro, faz sentido. Devo preparar algo específico para ela?"],
+      ["a", "It would be great if you could bring the updated pricing and the timeline for phase two.", "Seria ótimo se você pudesse trazer os preços atualizados e o cronograma da fase dois."],
+      ["b", "No problem. I'll send you a new invite and share the deck by Wednesday, so you have time to review it.", "Sem problema. Vou te mandar um novo convite e compartilhar a apresentação até quarta, para você ter tempo de revisar."],
+      ["a", "Perfect. Thanks for being so flexible.", "Perfeito. Obrigada por ser tão flexível."],
+      ["b", "Anytime. Talk to you on Thursday.", "Imagina. Nos falamos na quinta."]
+    ],
+    questions: [
+      { q: "Why is Megan calling?", options: ["To cancel the project", "To change the time of the call", "To ask for a discount", "To complain about the deck"], answer: 1, explain: "“Could we push it back to the afternoon?” Push back = adiar." },
+      { q: "What time will the new call start?", options: ["10:00", "2:00", "2:30", "4:30"], answer: 2, explain: "“Two thirty works for me.”" },
+      { q: "What does “I'm tied up until two” mean?", options: ["I'm busy until two", "I'm free until two", "I'm late until two", "I'm tired until two"], answer: 0, explain: "Be tied up = estar ocupado, enrolado com outra coisa." },
+      { q: "When will Bruno share the deck?", options: ["Today", "By Wednesday", "On Thursday", "After the call"], answer: 1, explain: "“I'll share the deck by Wednesday.” By = até (prazo)." }
+    ]
+  },
+  {
+    id: 6, lvl: 2, title: "Feedback from your manager", titlePt: "Feedback da gestora",
+    context: "A gestora dá um feedback sobre a apresentação de ontem: um elogio e um ponto de melhoria.",
+    speakers: { a: "Rachel · gestora", b: "Pedro · analista" },
+    lines: [
+      ["a", "Pedro, do you have a minute? I wanted to give you some feedback on yesterday's presentation.", "Pedro, tem um minuto? Queria te dar um feedback sobre a apresentação de ontem."],
+      ["b", "Sure, of course.", "Claro, com certeza."],
+      ["a", "First of all, the content was excellent. The data was clear and the client loved the recommendations.", "Antes de tudo, o conteúdo estava excelente. Os dados estavam claros e o cliente adorou as recomendações."],
+      ["b", "Thank you, that's great to hear.", "Obrigado, que bom ouvir isso."],
+      ["a", "One thing I'd like you to work on is timing. You had twenty minutes, and you went over by almost ten.", "Um ponto que eu gostaria que você trabalhasse é o tempo. Você tinha vinte minutos e passou quase dez."],
+      ["b", "Yeah, I noticed that too. I think I spent too long on the first section.", "É, eu também percebi. Acho que demorei demais na primeira parte."],
+      ["a", "Exactly. Next time, try to rehearse with a timer, and keep the details in the appendix in case they ask.", "Exatamente. Na próxima, tente ensaiar com um cronômetro e deixe os detalhes no apêndice, caso perguntem."],
+      ["b", "That's a good idea. Would you be willing to watch a dry run before the next one?", "Boa ideia. Você toparia assistir a um ensaio antes da próxima?"],
+      ["a", "Absolutely. Just put thirty minutes on my calendar the day before.", "Com certeza. É só marcar trinta minutos na minha agenda no dia anterior."],
+      ["b", "I will. Thanks for the feedback, Rachel.", "Pode deixar. Obrigado pelo feedback, Rachel."]
+    ],
+    questions: [
+      { q: "What did Rachel like about the presentation?", options: ["The timing", "The content and the recommendations", "The slide design", "The jokes"], answer: 1, explain: "“The content was excellent… the client loved the recommendations.”" },
+      { q: "What does Pedro need to work on?", options: ["He went over time", "His data was wrong", "He arrived late", "He spoke too fast"], answer: 0, explain: "“You went over by almost ten.” Go over = ultrapassar (o tempo)." },
+      { q: "How long was the presentation supposed to be?", options: ["Ten minutes", "Twenty minutes", "Thirty minutes", "Forty-five minutes"], answer: 1, explain: "“You had twenty minutes.”" },
+      { q: "What is a “dry run”?", options: ["A practice run, a rehearsal", "A short meeting", "A coffee break", "A written report"], answer: 0, explain: "Dry run = ensaio, teste antes da apresentação real." }
+    ]
+  },
+  {
+    id: 7, lvl: 3, title: "Project delay: options for the client", titlePt: "Atraso no projeto: opções para a cliente",
+    context: "O gerente de projeto explica um atraso e negocia alternativas com a cliente.",
+    speakers: { a: "Karen · cliente", b: "Thiago · gerente de projeto" },
+    lines: [
+      ["a", "Thiago, I just saw the status report. Are we really two weeks behind?", "Thiago, acabei de ver o relatório de status. Estamos mesmo duas semanas atrasados?"],
+      ["b", "I'm afraid so, Karen. The supplier delivered the components late, and that affected the whole testing phase.", "Infelizmente sim, Karen. O fornecedor entregou os componentes atrasados, e isso afetou toda a fase de testes."],
+      ["a", "That's a problem. We promised the launch to our board for March first.", "Isso é um problema. Prometemos o lançamento para a diretoria em primeiro de março."],
+      ["b", "I understand. That's why I wanted to talk about options. We can keep the date if we reduce the scope of the first release.", "Entendo. Por isso queria falar sobre opções. Podemos manter a data se reduzirmos o escopo da primeira versão."],
+      ["a", "What would we lose?", "O que perderíamos?"],
+      ["b", "The reporting module would come in a second release, about three weeks later. Everything else would be ready on time.", "O módulo de relatórios viria numa segunda versão, umas três semanas depois. Todo o resto ficaria pronto no prazo."],
+      ["a", "Hmm. And what about the extra cost?", "Hmm. E o custo extra?"],
+      ["b", "There's no extra cost for that option. If you need everything on March first, we'd have to add two developers, and that would increase the budget by about fifteen percent.", "Não há custo extra nessa opção. Se vocês precisarem de tudo em primeiro de março, teríamos que colocar mais dois desenvolvedores, e isso aumentaria o orçamento em uns quinze por cento."],
+      ["a", "Okay. Let me run this by my team, and I'll get back to you by Friday.", "Certo. Deixa eu levar isso para o meu time e te dou um retorno até sexta."],
+      ["b", "Sounds good. I'll send you a summary of both options in writing today.", "Combinado. Vou te mandar hoje um resumo das duas opções por escrito."]
+    ],
+    questions: [
+      { q: "Why is the project late?", options: ["Two developers quit", "The supplier delivered late", "The client changed the scope", "The budget was cut"], answer: 1, explain: "“The supplier delivered the components late.”" },
+      { q: "What is the first option?", options: ["Cancel the launch", "Launch on time without the reporting module", "Launch three weeks later with everything", "Hire a new supplier"], answer: 1, explain: "Reduzir o escopo: o módulo de relatórios fica para uma segunda versão." },
+      { q: "How much would it cost to add two developers?", options: ["Nothing", "About 15% more", "Double the budget", "About 50% more"], answer: 1, explain: "“Increase the budget by about fifteen percent.”" },
+      { q: "What does “Let me run this by my team” mean?", options: ["I'll discuss it with my team first", "I'll run a race with my team", "My team will do the work", "I'll replace my team"], answer: 0, explain: "Run something by someone = consultar alguém antes de decidir." }
+    ]
+  },
+  {
+    id: 8, lvl: 3, title: "Final interview: your questions and salary", titlePt: "Entrevista final: suas perguntas e salário",
+    context: "Fim de uma entrevista com a gestora da vaga: perguntas do candidato, pretensão salarial e próximos passos.",
+    speakers: { a: "Laura · gestora da vaga", b: "Felipe · candidato" },
+    lines: [
+      ["a", "So, Felipe, we're almost out of time. Do you have any questions for me?", "Então, Felipe, estamos quase sem tempo. Você tem alguma pergunta para mim?"],
+      ["b", "Yes, a couple. What would success look like in this role after the first six months?", "Sim, algumas. Como seria o sucesso nesta função depois dos primeiros seis meses?"],
+      ["a", "Good question. Mainly, we'd expect you to own the onboarding process for new clients and reduce churn in the first ninety days.", "Boa pergunta. Principalmente, esperaríamos que você fosse dono do processo de integração de novos clientes e reduzisse o cancelamento nos primeiros noventa dias."],
+      ["b", "That's very aligned with what I do in my current job. We cut early churn by almost twenty percent last year.", "Isso tem tudo a ver com o que faço no meu trabalho atual. Reduzimos o cancelamento inicial em quase vinte por cento no ano passado."],
+      ["a", "That's impressive. And just to be transparent, what are your salary expectations?", "Impressionante. E só para sermos transparentes, qual é sua pretensão salarial?"],
+      ["b", "Based on my research and my experience, I'm looking for something in the range of eighty-five to ninety-five thousand a year. But I'm open to discussing the full package.", "Com base na minha pesquisa e na minha experiência, busco algo na faixa de oitenta e cinco a noventa e cinco mil por ano. Mas estou aberto a discutir o pacote completo."],
+      ["a", "That's within our range. We also offer a bonus and a learning budget.", "Está dentro da nossa faixa. Também oferecemos bônus e um orçamento para estudos."],
+      ["b", "That sounds great. What are the next steps in the process?", "Parece ótimo. Quais são os próximos passos do processo?"],
+      ["a", "We're wrapping up interviews this week, and we'll get back to all candidates by next Wednesday.", "Estamos finalizando as entrevistas esta semana e daremos retorno a todos os candidatos até a próxima quarta."],
+      ["b", "Perfect. Thank you for your time, Laura. I really enjoyed our conversation.", "Perfeito. Obrigado pelo seu tempo, Laura. Gostei muito da nossa conversa."]
+    ],
+    questions: [
+      { q: "What would success look like in the role?", options: ["Hiring a new team", "Owning client onboarding and reducing early churn", "Doubling sales in six months", "Managing the learning budget"], answer: 1, explain: "“Own the onboarding process for new clients and reduce churn in the first ninety days.”" },
+      { q: "What did Felipe achieve last year?", options: ["He cut early churn by almost 20%", "He increased sales by 20%", "He hired twenty people", "He onboarded ninety clients"], answer: 0, explain: "“We cut early churn by almost twenty percent last year.”" },
+      { q: "What salary range did Felipe ask for?", options: ["$58,000–$59,000", "$85,000–$95,000", "$80,000–$90,000", "$95,000–$105,000"], answer: 1, explain: "Eighty-five (85) to ninety-five (95) thousand. Cuidado com fifteen/fifty e nineteen/ninety." },
+      { q: "When will Felipe hear back?", options: ["This week", "By next Wednesday", "In ninety days", "In six months"], answer: 1, explain: "“We'll get back to all candidates by next Wednesday.” Get back to = dar retorno." }
+    ]
+  }
 ];
